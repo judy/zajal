@@ -10,14 +10,16 @@ module Zajal
 			end
 
 			def run
-				sketch.setup
+				@sketch.setup
 				bg ||= sketch.background
 				while true do
 					Zajal::Graphics::Native.ofSetupScreen
-					sketch.update
+					@sketch.update
 					Zajal::Graphics::Native.ofClear bg[:r].to_f, bg[:g].to_f, bg[:b].to_f, 255.0
-					sketch.draw
+					@sketch.draw
 					Native.glfwSwapBuffers
+
+					@sketch = @sketch.refresh_continue if @sketch.stale?
 				end
 			end
 
