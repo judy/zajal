@@ -1,10 +1,11 @@
+require 'minitest/autorun'
 require_relative '../../spec_helper'
 require_relative '../../../lib/core/color'
 
 describe Color::Grayscale do
   describe "#to_rgb" do
     it "should create a new Color::RGB instance at the right grayscale value" do
-      Color::Grayscale.new(100, 40).to_rgb.to_a.should == [100, 100, 100, 40]
+      Color::Grayscale.new(100, 40).to_rgb.to_a.must_equal [100, 100, 100, 40]
     end
   end
 end
