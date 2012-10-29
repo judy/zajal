@@ -22,7 +22,8 @@ module Zajal
   # @api internal
   class Sketch
     # The {File} this sketch is watching
-    attr_reader :file
+    attr_reader :file, :code, :bare
+    attr_accessor :frontend
 
     @@pre_hooks = {}
     @@post_hooks = {}
@@ -79,6 +80,8 @@ module Zajal
     # @todo Iron out custom events
     def self.support_event *events
       events.each do |event|
+        @@supported_events ||= []
+        @@supported_events += events.map { |e| e.to_sym }
         @@pre_hooks[event.to_sym] = []
         @@post_hooks[event.to_sym] = []
 
@@ -86,9 +89,9 @@ module Zajal
           def #{event} *args, &blk
             if not blk.nil?
               @#{event}_proc = blk
-            elsif blk.nil? and not @#{event}_proc.nil?
+            elsif blk.nil?
               @@pre_hooks[:#{event}].each { |hook| instance_eval &hook }
-              @#{event}_proc.call(*args)
+              @#{event}_proc.call(*args) unless @#{event}_proc.nil?
               @@post_hooks[:#{event}].each { |hook| instance_eval &hook }
             end
           end
@@ -97,6 +100,34 @@ module Zajal
     end
 
     %w[setup update draw].each { |event| support_event event }
+
+    # Create a new sketch from an exisiting file
+    # 
+    # @example
+    #   skt = Sketch.new_from_file "foo.zj"
+    # 
+    # @param file [String] the file to create the sketch from
+    def self.new_from_file file
+      new file
+    end
+
+    # Create a new sketch from source code
+    # 
+    # Internally, the code it written to a temporary file and that file is
+    # loaded normally.
+    # 
+    # @example
+    #   skt = Sketch.new_from_code "draw do; circle 50, 50, 10 end"
+    # 
+    # @param code [String] the code to create the sketch from
+    def self.new_from_code code
+      require "tempfile"
+      tempfile = Tempfile.new "zajal-new-sketch"
+      tempfile.write code
+      tempfile.close
+
+      new tempfile.path
+    end
 
     # Create a new {Sketch} object watching +file+
     # 
@@ -113,7 +144,17 @@ module Zajal
     def initialize file
       @file = open(File.expand_path(file))
       @file_last_modified = @file.mtime
-      instance_eval @file.read
+      @code = @file.read
+
+      @bare = true
+      # look for :call, nil, :setup/:draw/:update in the sexp
+      @code.to_sexp.flatten.each_cons(3) { |a, b, c| @bare = false if a == :call and @@supported_events.member? c }
+      
+      if @bare
+        instance_eval "draw do; #{@code}\nend"
+      else
+        instance_eval @code
+      end
     end
 
     # @return [Boolean] has the watched file has been updated?

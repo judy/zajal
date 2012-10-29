@@ -11,6 +11,32 @@ module Zajal
       class Sketch < Zajal::Sketch
         support_event :mouse_down, :mouse_pressed, :mouse_up, :mouse_moved
         support_event :key_down, :key_pressed, :key_up
+
+        def time
+          @bare ? 0.0 : super
+        end
+
+        def frame
+          @bare ? 0 : super
+        end
+
+        def smoothing s=nil
+          if s.present? and not @smoothing == s
+            @smoothing = s
+            case @smoothing
+            when TrueClass
+              @frontend.set_smoothing 8
+            when FalseClass
+              @frontend.set_smoothing 0
+            when 0..8
+              @frontend.set_smoothing @smoothing
+            else
+              raise ArgumentError, s
+            end
+          end
+        end
+
+        @smoothing
       end
 
       # Create a new Glfw frontend, and open a window with size +(width,height)+
@@ -31,6 +57,12 @@ module Zajal
 
         @keyButtonCallback = Proc.new { |button, action| action == Native::GLFW_RELEASE ? @sketch.key_up(button) : @sketch.key_down(button) if @sketch }
         Native.glfwSetKeyCallback @keyButtonCallback
+
+        @fbo = Zajal::Graphics::Fbo.new width, height, 0
+      end
+
+      def set_smoothing s
+        @fbo = Zajal::Graphics::Fbo.new @fbo.width, @fbo.height, s
       end
 
       # Run the sketch
@@ -44,30 +76,27 @@ module Zajal
       # 
       # @return [nil] Nothing
       def run
+        @sketch.frontend = self # hack
         @sketch.setup
+        @fbo.use { @sketch.draw } if @sketch.bare
+
         while true do
-          @sketch.update
-          @sketch.draw
+          @fbo.use { @sketch.update; @sketch.draw } unless @sketch.bare
+          @fbo.draw 0, 0
+
           Native.glfwSwapBuffers
           Native.glfwfrontend_incrementFrameNum @pointer
 
           # TODO this should be taken care of by Sketch
           if @sketch.stale?
             @sketch = @sketch.refresh_restart 
+            @sketch.frontend = self # hack
             @sketch.setup
+            @fbo.use { @sketch.draw } if @sketch.bare
+
             Native.glfwfrontend_setFrameNum @pointer, 0
           end
         end
-      end
-
-      def run_once
-        @sketch.setup
-        @sketch.update
-        @sketch.draw
-
-        screenshot = Zajal::Images::Image.new
-        screenshot.grab_screen 0, 0, @sketch.width, @sketch.height
-        screenshot.save "~/Desktop/screen.png"
       end
 
       module Native
