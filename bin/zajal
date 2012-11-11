@@ -1,20 +1,42 @@
 #!/usr/bin/env ruby
+require 'optparse'
+require 'ostruct'
 
 require_relative "../lib/zajal"
 
+options = OpenStruct.new
+OptionParser.new do |opts|
+  opts.banner = "Usage: #{$0} sketch.zj OPTIONS"
+
+  options.width = 400
+  options.height = 400
+
+  opts.on("-w", "--width W", Integer, "Width of the window, defaults to #{options.width}") do |w|
+    options.width = w
+  end
+
+  opts.on("-h", "--height H", Integer, "Height of the window, defaults to #{options.height}") do |h|
+    options.height = h
+  end
+
+  opts.on("-s", "--size S", Integer, "Width and height of the window") do |s|
+    options.width = s
+    options.height = s
+  end
+
+  opts.on("-v", "--version", "Print out version string and exit") do |o|
+    Zajal::Version.print
+    exit
+  end
+
+  opts.on( "-?", "--help", "Display this message" ) do |v|
+    puts opts.help
+    exit
+  end
+end.parse!
+
 Zajal::Version.print
 
-sketch_path = if ARGV.empty?
-  require 'tempfile'
-  tempfile = Tempfile.new "zajal-stdin-sketch"
-  tempfile.write STDIN.read
-  tempfile.close
-
-  tempfile.path
-else
-  ARGV.first
-end
-
-glfw = Zajal::Frontends::Glfw.new 400, 400
-glfw.sketch = Zajal::Frontends::Glfw::Sketch.new sketch_path
+glfw = Zajal::Frontends::Glfw.new options.width, options.height
+glfw.sketch = Zajal::Frontends::Glfw::Sketch.new ARGV.empty? ? STDIN.read : open(ARGV.first)
 glfw.run

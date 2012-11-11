@@ -1,4 +1,5 @@
 module Zajal
+  # @api zajal
   module Images
     # An image
     # 
@@ -21,7 +22,7 @@ module Zajal
         when Signature[]
         when Signature[:to_s]
           load args.first
-        when Signature[:to_f, :to_f]
+        when Signature[:to_i, :to_i]
           resize *args
         else
           raise ArgumentError, args.inspect
@@ -36,8 +37,13 @@ module Zajal
       # @param filename [#to_s] name of the file to load
       # 
       # @return [nil] nothing
+      # 
+      # @todo fix cwd bug in ofImage::loadImage!!
       def load filename
-        Native.ofimage_loadImage @pointer, File.expand_path(filename.to_s).to_ptr
+        path = File.expand_path(filename.to_s)
+        Dir.chdir do
+          Native.ofimage_loadImage @pointer, path.to_ptr
+        end
       end
 
       # Save the image to the disk
@@ -56,7 +62,7 @@ module Zajal
 
       def resize w, h=nil
         h = w unless h.present?
-        Native.ofimage_resize @pointer, w.to_f, h.to_f
+        Native.ofimage_resize @pointer, w.to_i, h.to_i
       end
 
       # @return [Float] current image width
@@ -113,6 +119,7 @@ module Zajal
         Native.ofimage_mirror @pointer, *d
       end
 
+      # @api internal
       module Native
         extend FFI::Cpp::Library
         ffi_lib "lib/core/lib/libof.so"

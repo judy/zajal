@@ -8,36 +8,61 @@ def temp_name name
   Tempfile::Dir::Tmpname.make_tmpname Tempfile::Dir::Tmpname.tmpdir, name
 end
 
+def timestamped_name ext
+  "zajal-frame-#{Time.now.strftime("%Y%m%d%H%M%S")}.#{ext}"
+end
+
 require_relative "../lib/zajal"
 
 options = OpenStruct.new
 OptionParser.new do |opts|
-  opts.banner = "Usage: #{$0} -f sketch.zj -o screenshot.png"
+  opts.banner = "Usage: #{$0} sketch.zj -o screenshot.png"
 
-  options.width = 100
-  options.height = 100
+  options.width = 400
+  options.height = 400
   options.b64 = false
-  options.file = nil
   options.output = nil
-
-  opts.on( "-f", "--file FILE", String, "Script file to render" ) do |f|
-    options.file = File.expand_path(f)
-  end
+  options.extension = "png"
+  options.use_timestamp = false
 
   opts.on("-o", "--output file.png", "Path to write resulting image to") do |o|
     options.output = File.expand_path(o)
   end
 
-  opts.on("-w", "--width W", "Width of the rendering, defaults to 100") do |w|
+  opts.on("-w", "--width W", "Width of the rendering, defaults to 400") do |w|
     options.width = w
   end
 
-  opts.on("-h", "--height H", "Height of the rendering, defaults to 100") do |h|
+  opts.on("-h", "--height H", "Height of the rendering, defaults to 400") do |h|
     options.height = h
   end
 
   opts.on("-b", "--base64", "Write base64 encoded image to STDOUT") do |b|
     options.b64 = true
+  end
+
+  opts.on("-p", "--png", "Use .png extension when generating filenames, the default") do |b|
+    options.extension = "png"
+  end
+
+  opts.on("-g", "--gif", "Use .gif extension when generating filenames") do |b|
+    options.extension = "gif"
+  end
+
+  opts.on("-t", "--tiff", "Use .tiff extension when generating filenames") do |b|
+    options.extension = "tiff"
+  end
+
+  opts.on("-j", "--jpg", "Use .jpg extension when generating filenames") do |b|
+    options.extension = "jpg"
+  end
+
+  opts.on("-J", "--jpeg", "Use .jpeg extension when generating filenames") do |b|
+    options.extension = "jpeg"
+  end
+
+  opts.on("-S", "--timestamp", "Use timestamped filename") do |b|
+    options.use_timestamp = true
   end
 
   opts.on( "-?", "--help", "Display this message" ) do |v|
@@ -46,18 +71,22 @@ OptionParser.new do |opts|
   end
 end.parse!
 
+options.output = timestamped_name options.extension if options.use_timestamp
+
+sketch_file = ARGV.first
+
 # output defaults to {input}-screenshot.png
-if options.output.nil? and not options.file.nil?
-  options.output = "#{File.basename(options.file)}-screenshot.png"
+if options.output.nil?
+  options.output = if sketch_file.nil?
+    timestamped_name options.extension
+  else
+    File.basename(sketch_file).gsub /\.[^\.]+/, ".#{options.extension}"
+  end
 end
 
 # render sketch
 zj = Zajal::Frontends::Headless.new options.width, options.height
-if options.file.nil?
-  zj.sketch = Zajal::Frontends::Headless::Sketch.new_from_code STDIN.read
-else
-  zj.sketch = Zajal::Frontends::Headless::Sketch.new_from_file options.file unless options.file.nil?
-end
+zj.sketch = Zajal::Frontends::Headless::Sketch.new sketch_file.nil? ? STDIN.read : open(sketch_file)
 zj.run
 
 if options.b64

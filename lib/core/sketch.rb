@@ -101,34 +101,6 @@ module Zajal
 
     %w[setup update draw].each { |event| support_event event }
 
-    # Create a new sketch from an exisiting file
-    # 
-    # @example
-    #   skt = Sketch.new_from_file "foo.zj"
-    # 
-    # @param file [String] the file to create the sketch from
-    def self.new_from_file file
-      new file
-    end
-
-    # Create a new sketch from source code
-    # 
-    # Internally, the code it written to a temporary file and that file is
-    # loaded normally.
-    # 
-    # @example
-    #   skt = Sketch.new_from_code "draw do; circle 50, 50, 10 end"
-    # 
-    # @param code [String] the code to create the sketch from
-    def self.new_from_code code
-      require "tempfile"
-      tempfile = Tempfile.new "zajal-new-sketch"
-      tempfile.write code
-      tempfile.close
-
-      new tempfile.path
-    end
-
     # Create a new {Sketch} object watching +file+
     # 
     # The file's contents are loaded into the returned {Sketch} object.
@@ -141,37 +113,53 @@ module Zajal
     # @todo Iron out custom events
     # 
     # @see Sketch.support_event
-    def initialize file
-      @file = open(File.expand_path(file))
-      @file_last_modified = @file.mtime
-      @code = @file.read
-
-      @bare = true
-      # look for :call, nil, :setup/:draw/:update in the sexp
-      @code.to_sexp.flatten.each_cons(3) { |a, b, c| @bare = false if a == :call and @@supported_events.member? c }
-      
-      if @bare
-        instance_eval "draw do; #{@code}\nend"
+    def initialize code_or_file=nil, &blk
+      if blk
+        instance_eval &blk
       else
-        instance_eval @code
+        if code_or_file.is_a? File
+          @file = code_or_file
+          @file_last_modified = @file.mtime
+          @code = @file.read
+
+        elsif code_or_file.is_a? String
+          @code = code_or_file
+
+        else
+          raise ArgumentError, "Can't create sketch!"
+        end
+
+        @bare = true
+        # look for :call, nil, :setup/:draw/:update in the sexp
+        @code.to_sexp.flatten.each_cons(3) { |a, b, c| @bare = false if a == :call and @@supported_events.member? c }
+        
+        if @bare
+          instance_eval "draw do; #{@code}\nend"
+        else
+          instance_eval @code
+        end
       end
     end
 
     # @return [Boolean] has the watched file has been updated?
     def stale?
-      @file.mtime > @file_last_modified
+      @file.nil? ? false : @file.mtime > @file_last_modified
     end
 
     # Refresh sketch and keep the sketch running going
     def refresh_continue
-      sk = self.class.new @file.path
+      return nil if @file.nil?
+
+      sk = self.class.new open(@file.path)
       sk.copy_instance_variables_from self, [:@setup_proc, :@draw_proc, :@update_proc, :@file_last_modified]
       sk
     end
 
     # Reload the file and start the sketch over
     def refresh_restart
-      self.class.new @file.path
+      return nil if @file.nil?
+
+      self.class.new open(@file.path)
     end
 
     # @see http://apidock.com/rails/Object/copy_instance_variables_from
